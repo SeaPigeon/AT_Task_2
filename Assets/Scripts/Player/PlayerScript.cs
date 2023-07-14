@@ -1,48 +1,51 @@
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Cinemachine;
 using UnityEngine.SceneManagement;
+using UnityEngine.AI;
 
+public enum PlayerStates
+{
+    Rest,
+    Selecting,
+    HoldingSelection
+}
 public class PlayerScript : MonoBehaviour
 {
     [Header("Player Variables")]
-    [SerializeField] static int _MAX_HEALTH = 100;
-    [SerializeField] int _currentHealth;
     [SerializeField] float _moveSpeed;
-    [SerializeField] float _runSpeed;
-    [SerializeField] float _rotationSpeed;
-    [SerializeField] CinemachineVirtualCamera _gameCam;
 
     [Header("PlayerInput")]
     [SerializeField] CharacterController _playerCC;
     [SerializeField] Vector2 _movementInput;
     [SerializeField] Vector2 _rotateInput;
-    [SerializeField] bool southButtonInput;
+    [SerializeField] bool _southButtonInput;
+    [SerializeField] bool _westButtonInput;
+    [SerializeField] bool _eastButtonInput;
     [SerializeField] bool _RSInput;
     [SerializeField] bool _LSInput;
-    [SerializeField] bool _westButtonInput;
+    
     private Vector3 _moveVector;
     private Vector3 _appliedMoveVector;
 
     [Header("Debug")]
+    [SerializeField] PlayerStates _playerState;
+    private CinemachineVirtualCamera _gameCam;
     private static PlayerScript _playerInstance;
-    [SerializeField] GameManagerScript _gameManager;
-    [SerializeField] SceneManagerScript _sceneManager;
-    [SerializeField] InputManagerScript _inputManager;
-    [SerializeField] LinkUIScript _UILinker;
-    [SerializeField] AudioManagerScript _audioManager;
-    [SerializeField] SpriteRenderer _playerSprite;
-    [SerializeField] Transform _spawnPoint;
+    private GameManagerScript _gameManager;
+    private SceneManagerScript _sceneManager;
+    private InputManagerScript _inputManager;
+    private MeshRenderer _playerMesh;
 
     // G&S
     public static PlayerScript PlayerInstance { get { return _playerInstance; } }
     public Vector2 MovementInput { get { return _movementInput; } set { _movementInput = value; } }
-    public Vector2 RotateInput { get { return _rotateInput; } set { _rotateInput = value; } }
-    public bool FireInput { get { return southButtonInput; } set { southButtonInput = value; } }
     public CinemachineVirtualCamera InGameCamera { get { return _gameCam; } }
 
+    // Main
     private void Awake() 
     {
         PlayerSingleton();
@@ -53,16 +56,18 @@ public class PlayerScript : MonoBehaviour
         SubscribeToEvents();
         ResetPlayer();
     }
-
     private void Update()
     {
         Move(MovementInput);
     }
+    private void LateUpdate()
+    {
+    }
 
     // G&S
-    public int CurrentHealth { get { return _currentHealth; } set { _currentHealth = value; } }
+    public Vector3 CursorPosition { get { return transform.position; } }
 
-    // Methods
+    // Essentials
     private void PlayerSingleton()
     {
         if (_playerInstance == null)
@@ -81,10 +86,9 @@ public class PlayerScript : MonoBehaviour
         _gameManager = GameManagerScript.GMInstance;
         _inputManager = InputManagerScript.IMInstance;
         _sceneManager = SceneManagerScript.SMInstance;
-        _UILinker = UIManagerScript.UIMInstance.GetComponent<LinkUIScript>();
-        _audioManager = AudioManagerScript.AMInstance;
-        _playerSprite = GetComponentInChildren<SpriteRenderer>();
         _playerCC = gameObject.GetComponent<CharacterController>();
+        _playerMesh = GetComponent<MeshRenderer>();
+        _gameCam = GetComponentInChildren<CinemachineVirtualCamera>();
     }
     private void SubscribeToEvents()
     {
@@ -93,111 +97,118 @@ public class PlayerScript : MonoBehaviour
     }
     public void SubscribeGameInputs()
     {
-        Debug.Log("Call");
         // UNSUB
         _inputManager.InputMap.Game.Move.performed -= OnMove;
+        _inputManager.InputMap.Game.Rotate.performed -= OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.started -= OnButtonSouth;
-        _inputManager.InputMap.Game.ButtonWest.started -= OnButtonWest;
+        _inputManager.InputMap.Game.ButtonWest.performed -= OnButtonWest;
+        _inputManager.InputMap.Game.ButtonEast.started -= OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.started -= OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.started -= OnShoulderL;
 
         _inputManager.InputMap.Game.Move.canceled -= OnMove;
+        _inputManager.InputMap.Game.Rotate.canceled -= OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.canceled -= OnButtonSouth;
         _inputManager.InputMap.Game.ButtonWest.canceled -= OnButtonWest;
+        _inputManager.InputMap.Game.ButtonEast.canceled -= OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.canceled -= OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.canceled -= OnShoulderL;
 
         // SUB
         _inputManager.InputMap.Game.Move.performed += OnMove;
+        _inputManager.InputMap.Game.Rotate.performed += OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.started += OnButtonSouth;
-        _inputManager.InputMap.Game.ButtonWest.started += OnButtonWest;
+        _inputManager.InputMap.Game.ButtonWest.performed += OnButtonWest;
         //_inputManager.InputMap.Game.ButtonNorth.performed += OnButtonNorth;
-        //_inputManager.InputMap.Game.ButtonEast.performed += OnButtonEast;
+        _inputManager.InputMap.Game.ButtonEast.performed += OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.started += OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.started += OnShoulderL;
         //_inputManager.InputMap.Game.StartButton.performed += OnStartButton;
 
         _inputManager.InputMap.Game.Move.canceled += OnMove;
+        _inputManager.InputMap.Game.Rotate.canceled += OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.canceled += OnButtonSouth;
         _inputManager.InputMap.Game.ButtonWest.canceled += OnButtonWest;
         //_inputManager.InputMap.Game.ButtonNorth.canceled += OnButtonNorth;
-        //_inputManager.InputMap.Game.ButtonEast.canceled += OnButtonEast;
+        _inputManager.InputMap.Game.ButtonEast.canceled += OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.canceled += OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.canceled += OnShoulderL;
         //_inputManager.InputMap.Game.StartButton.canceled += OnStartButton;
     }
     private void SetUpPlayer()
     {
-        LinkUI();
+        _playerState = PlayerStates.Rest;
+
         if (SceneManager.GetActiveScene().buildIndex == 4 ||
             SceneManager.GetActiveScene().buildIndex == 5 ||
             SceneManager.GetActiveScene().buildIndex == 6)
         {
-
             SpawnPlayer(Vector3.zero);
         }
         else
         {
-            TogglePlayerSprite(false);
+            TogglePlayerMesh(false);
         }
     }
+
+    // Player Spawn
     public void ResetPlayer() 
     {
-        CurrentHealth = _MAX_HEALTH;
         _gameManager.ResetScore();
         _gameManager.Victory = false;
     }
-    public void TogglePlayerSprite(bool state)
+    public void TogglePlayerMesh(bool state)
     {
-        if (state != _playerSprite.enabled)
+        if (state != _playerMesh.enabled)
         {
-            _playerSprite.enabled = state;
+            _playerMesh.enabled = state;
         }
     }
     public void MoveToSpawnPoint(Vector3 pos)
     {
         transform.position = new Vector3(pos.x, pos.y, pos.z);
-       
-        Debug.Log("Player Spawned from GMEvent: " + transform.position);
     }
     public void SpawnPlayer(Vector3 pos)
     {
-        TogglePlayerSprite(true);
+        TogglePlayerMesh(true);
         MoveToSpawnPoint(pos);
     }
 
-    // Gameplay
+    // PlayerUI
+    private void LinkUI()
+    {
+        // Link UI
+    }
+
+    // Player Movement
     private void Move(Vector2 input)
     {
-        _moveVector = Vector3.zero;
-        _appliedMoveVector = Vector3.zero;
+        _moveVector.x = input.x * _moveSpeed;
         _moveVector.z = input.y * _moveSpeed;
 
         _appliedMoveVector = transform.TransformDirection(_moveVector);
         _playerCC.Move(_appliedMoveVector * Time.deltaTime);
-        gameObject.transform.Rotate(new Vector3(0, input.x * _rotationSpeed * Time.deltaTime, 0));
-    }
-    
-    private void LinkUI()
-    {
-        Debug.Log("LinkUI Function Call!");
     }
 
-    // Inputs
     private void OnMove(InputAction.CallbackContext context) 
     {
         MovementInput = context.ReadValue<Vector2>();
-        Debug.Log("MovePlayer");
+        //Debug.Log("MovePlayer");
+    }
+    private void OnRotate(InputAction.CallbackContext context)
+    {
+        _rotateInput = context.ReadValue<Vector2>();
+        //Debug.Log("RotateInput");
     }
     private void OnButtonSouth(InputAction.CallbackContext context) 
     {
-        southButtonInput = context.ReadValueAsButton();
-        Debug.Log("SouthPlayer");
+        _southButtonInput = context.ReadValueAsButton();
+        //Debug.Log("SouthPlayer");
     }
     private void OnButtonWest(InputAction.CallbackContext context) 
     {
-        _westButtonInput = context.ReadValueAsButton();;
-        Debug.Log("WestPlayer");
+        _westButtonInput = context.ReadValueAsButton();
+        //Debug.Log("WestPlayer");
     }
     private void OnButtonNorth(InputAction.CallbackContext context) 
     {
@@ -205,25 +216,31 @@ public class PlayerScript : MonoBehaviour
     }
     private void OnButtonEast(InputAction.CallbackContext context) 
     {
-        Debug.Log("EastPlayer");
+        _eastButtonInput = context.ReadValueAsButton();
+        //Debug.Log("EastPlayer");
     }
     private void OnShoulderR(InputAction.CallbackContext context) 
     {
         _RSInput = context.ReadValueAsButton(); 
-        Debug.Log("ShoulderRPlayer");
+        //Debug.Log("ShoulderRPlayer");
     }
     private void OnShoulderL(InputAction.CallbackContext context) 
     {
         _LSInput = context.ReadValueAsButton();  
-        Debug.Log("ShoulderLPlayer");
+        //Debug.Log("ShoulderLPlayer");
     }
     private void OnStartButton(InputAction.CallbackContext context) 
     {
         Debug.Log("StartPlayer");
     }
 
+    // OnTrigger
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log("Player Collision: " + other.name);
+        
+    }
+    private void OnTriggerExit(Collider other)
+    {
+        
     }
 }

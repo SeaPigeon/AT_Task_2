@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using Cinemachine;
+using Random = UnityEngine.Random;
 
 public enum GameState
 {
@@ -15,7 +16,7 @@ public enum GameState
 }
 public class GameManagerScript : MonoBehaviour
 {
-    [Header("Game Variables")]
+    [Header("System Variables")]
     private Scene _activeScene;
     [SerializeField] string _activeSceneName;
     [SerializeField] int _sceneLoadedIndex;
@@ -24,11 +25,13 @@ public class GameManagerScript : MonoBehaviour
     [SerializeField] CinemachineVirtualCamera _activeCamera;
     [SerializeField] AudioClip _currentAudioClipLoaded;
     [SerializeField] bool _audioClipPlaying;
+
+    [Header("Game Variables")]
     [SerializeField] int _score;
     [SerializeField] bool _victory;
 
+    //[Header("Debug")]
     public event Action OnGMSetUpComplete;
-
     private static GameManagerScript _gameManagerInstance = null;
 
     void Awake()
@@ -41,10 +44,8 @@ public class GameManagerScript : MonoBehaviour
         SetUpGame();
     }
 
-    // Getters && Setters
+    // // G&S States
     public static GameManagerScript GMInstance { get { return _gameManagerInstance; } }
-
-    // G&S States
     public Scene ActiveScene { get { return _activeScene; } set { _activeScene = value; } }
     public string ActiveSceneName { get { return _activeSceneName; } set { _activeSceneName = value; } }
     public int SceneLoadedIndex { get { return _sceneLoadedIndex; } set { _sceneLoadedIndex = value; } }
@@ -55,6 +56,7 @@ public class GameManagerScript : MonoBehaviour
     public bool AudioClipPlaying { get { return _audioClipPlaying; } set { _audioClipPlaying = value; } }
     public int Score { get { return _score; } set { _score = value; } }
     public bool Victory { get { return _victory; } set { _victory = value; } }
+
 
     // Methods
     private void GameManagerSingleton()
@@ -83,6 +85,7 @@ public class GameManagerScript : MonoBehaviour
         SetGameState();
         _victory = false;
         OnGMSetUpComplete?.Invoke();
+        
         //Debug.Log("GameManager SetUp");
     }
     private void SetUpGame(Scene scene, LoadSceneMode mode)
@@ -91,6 +94,7 @@ public class GameManagerScript : MonoBehaviour
         ActiveSceneName = SceneManager.GetActiveScene().name;
         SceneLoadedIndex = SceneManager.GetActiveScene().buildIndex;
         SetGameState();
+        _victory = false;
         OnGMSetUpComplete?.Invoke();
     }
     public void SetGameState()
