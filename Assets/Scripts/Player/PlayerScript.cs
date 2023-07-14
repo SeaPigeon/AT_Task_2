@@ -16,7 +16,8 @@ public enum PlayerStates
 public class PlayerScript : MonoBehaviour
 {
     [Header("Player Variables")]
-    [SerializeField] float _moveSpeed;
+    [SerializeField] float _moveSpeed = 13;
+    [SerializeField] float _rotationSpeed = 80;
 
     [Header("PlayerInput")]
     [SerializeField] CharacterController _playerCC;
@@ -59,9 +60,6 @@ public class PlayerScript : MonoBehaviour
     private void Update()
     {
         Move(MovementInput);
-    }
-    private void LateUpdate()
-    {
     }
 
     // G&S
@@ -183,11 +181,12 @@ public class PlayerScript : MonoBehaviour
     // Player Movement
     private void Move(Vector2 input)
     {
-        _moveVector.x = input.x * _moveSpeed;
+        _moveVector.x = 0;
         _moveVector.z = input.y * _moveSpeed;
 
         _appliedMoveVector = transform.TransformDirection(_moveVector);
         _playerCC.Move(_appliedMoveVector * Time.deltaTime);
+        gameObject.transform.Rotate(new Vector3(0, input.x * _rotationSpeed * Time.deltaTime, 0));
     }
 
     private void OnMove(InputAction.CallbackContext context) 
