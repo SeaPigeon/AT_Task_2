@@ -143,7 +143,7 @@ public class PlayerScript : MonoBehaviour
             SceneManager.GetActiveScene().buildIndex == 5 ||
             SceneManager.GetActiveScene().buildIndex == 6)
         {
-            SpawnPlayer(Vector3.zero);
+            SpawnPlayer(new Vector3(0, 1, -6));
         }
         else
         {
