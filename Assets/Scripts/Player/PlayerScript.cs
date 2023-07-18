@@ -9,22 +9,22 @@ using UnityEngine.AI;
 
 public enum PlayerStates
 {
-    Rest,
-    Selecting,
-    HoldingSelection
+    Rest
 }
 public class PlayerScript : MonoBehaviour
 {
     [Header("Player Variables")]
     [SerializeField] float _moveSpeed = 13;
     [SerializeField] float _rotationSpeed = 80;
+    [SerializeField] float _planeRotationSpeed = 50;
 
     [Header("PlayerInput")]
-    [SerializeField] CharacterController _playerCC;
+    //[SerializeField] CharacterController _playerCC;
     [SerializeField] Vector2 _movementInput;
     [SerializeField] Vector2 _rotateInput;
     [SerializeField] bool _southButtonInput;
     [SerializeField] bool _westButtonInput;
+    [SerializeField] bool _northButtonInput;
     [SerializeField] bool _eastButtonInput;
     [SerializeField] bool _RSInput;
     [SerializeField] bool _LSInput;
@@ -40,6 +40,7 @@ public class PlayerScript : MonoBehaviour
     private SceneManagerScript _sceneManager;
     private InputManagerScript _inputManager;
     private MeshRenderer _playerMesh;
+    private Transform _body;
 
     // G&S
     public static PlayerScript PlayerInstance { get { return _playerInstance; } }
@@ -60,8 +61,9 @@ public class PlayerScript : MonoBehaviour
     private void Update()
     {
         Move(MovementInput);
+        PlaneRotations();
     }
-
+    
     // G&S
     public Vector3 CursorPosition { get { return transform.position; } }
 
@@ -84,9 +86,10 @@ public class PlayerScript : MonoBehaviour
         _gameManager = GameManagerScript.GMInstance;
         _inputManager = InputManagerScript.IMInstance;
         _sceneManager = SceneManagerScript.SMInstance;
-        _playerCC = gameObject.GetComponent<CharacterController>();
-        _playerMesh = GetComponent<MeshRenderer>();
+        //_playerCC = gameObject.GetComponent<CharacterController>();
         _gameCam = GetComponentInChildren<CinemachineVirtualCamera>();
+        _body = transform.GetChild(0).transform;
+        _playerMesh = GetComponent<MeshRenderer>();
     }
     private void SubscribeToEvents()
     {
@@ -116,9 +119,9 @@ public class PlayerScript : MonoBehaviour
         _inputManager.InputMap.Game.Move.performed += OnMove;
         _inputManager.InputMap.Game.Rotate.performed += OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.started += OnButtonSouth;
-        _inputManager.InputMap.Game.ButtonWest.performed += OnButtonWest;
-        //_inputManager.InputMap.Game.ButtonNorth.performed += OnButtonNorth;
-        _inputManager.InputMap.Game.ButtonEast.performed += OnButtonEast;
+        _inputManager.InputMap.Game.ButtonWest.started += OnButtonWest;
+        _inputManager.InputMap.Game.ButtonNorth.started += OnButtonNorth;
+        _inputManager.InputMap.Game.ButtonEast.started += OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.started += OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.started += OnShoulderL;
         //_inputManager.InputMap.Game.StartButton.performed += OnStartButton;
@@ -127,7 +130,7 @@ public class PlayerScript : MonoBehaviour
         _inputManager.InputMap.Game.Rotate.canceled += OnRotate;
         _inputManager.InputMap.Game.ButtonSouth.canceled += OnButtonSouth;
         _inputManager.InputMap.Game.ButtonWest.canceled += OnButtonWest;
-        //_inputManager.InputMap.Game.ButtonNorth.canceled += OnButtonNorth;
+        _inputManager.InputMap.Game.ButtonNorth.canceled += OnButtonNorth;
         _inputManager.InputMap.Game.ButtonEast.canceled += OnButtonEast;
         _inputManager.InputMap.Game.ShoulderR.canceled += OnShoulderR;
         _inputManager.InputMap.Game.ShoulderL.canceled += OnShoulderL;
@@ -181,13 +184,37 @@ public class PlayerScript : MonoBehaviour
     // Player Movement
     private void Move(Vector2 input)
     {
-        _moveVector.x = 0;
+        /*_moveVector.x = 0;
         _moveVector.z = input.y * _moveSpeed;
 
         _appliedMoveVector = transform.TransformDirection(_moveVector);
         _playerCC.Move(_appliedMoveVector * Time.deltaTime);
-        gameObject.transform.Rotate(new Vector3(0, input.x * _rotationSpeed * Time.deltaTime, 0));
+        gameObject.transform.Rotate(new Vector3(0, input.x * _rotationSpeed * Time.deltaTime, 0));*/
+        Vector3 moveVector = new Vector3(0f, 0f, input.y) * _moveSpeed * Time.deltaTime;
+        transform.Translate(moveVector, Space.Self);
+
+        float rotation = input.x * _rotationSpeed * Time.deltaTime;
+        transform.Rotate(0f, rotation, 0f);
     }
+
+    // Plane
+    private void RotatePlane(bool input, Vector3 direction)
+    {
+        if (input)
+        {
+            transform.Rotate(direction, _planeRotationSpeed * Time.deltaTime);
+        }
+    }
+    private void PlaneRotations()
+    {
+        RotatePlane(_southButtonInput, Vector3.left);
+        RotatePlane(_northButtonInput, Vector3.right);
+        RotatePlane(_westButtonInput, Vector3.forward);
+        RotatePlane(_eastButtonInput, Vector3.back);
+    }
+
+    // Collision
+    
 
     private void OnMove(InputAction.CallbackContext context) 
     {
@@ -211,6 +238,7 @@ public class PlayerScript : MonoBehaviour
     }
     private void OnButtonNorth(InputAction.CallbackContext context) 
     {
+        _northButtonInput = context.ReadValueAsButton();
         Debug.Log("NorthPlayer");
     }
     private void OnButtonEast(InputAction.CallbackContext context) 
@@ -220,7 +248,7 @@ public class PlayerScript : MonoBehaviour
     }
     private void OnShoulderR(InputAction.CallbackContext context) 
     {
-        _RSInput = context.ReadValueAsButton(); 
+        _RSInput = context.ReadValueAsButton();
         //Debug.Log("ShoulderRPlayer");
     }
     private void OnShoulderL(InputAction.CallbackContext context) 
@@ -234,12 +262,53 @@ public class PlayerScript : MonoBehaviour
     }
 
     // OnTrigger
-    private void OnTriggerEnter(Collider other)
+    /*private void GetCollisionPoints(Collider other)
     {
+        Bounds bounds = other.bounds;
+
+        Vector3 min = bounds.min;
+        Vector3 max = bounds.max;
+
+        List<Vector3> intersectionPoints = new List<Vector3>();
+
+        for (float x = min.x; x <= max.x; x += bounds.size.x)
+        {
+            for (float y = min.y; y <= max.y; y += bounds.size.y)
+            {
+                for (float z = min.z; z <= max.z; z += bounds.size.z)
+                {
+                    Vector3 intersectionPoint = new Vector3(x, y, z);
+                    intersectionPoints.Add(intersectionPoint);
+                }
+            }
+        }
+
+        // Loop through the intersection points
+        for (int i = 0; i < intersectionPoints.Count; i++)
+        {
+            Vector3 intersectionPoint = other.transform.TransformPoint(intersectionPoints[i]);
+            Debug.Log("Intersection Point " + i + ": " + intersectionPoint);
+        }
         
     }
-    private void OnTriggerExit(Collider other)
+    private void OnTriggerStay(Collider other)
     {
+        if (_RSInput)
+        {
+            GetCollisionPoints(other);
+        }
         
+
+
+    }*/
+    private void OnCollisionStay(Collision collision)
+    {
+        if (_RSInput)
+        {
+            foreach (ContactPoint contact in collision.contacts)
+            {
+                Debug.Log("Contact point: " + contact.point);
+            }
+        }
     }
 }
